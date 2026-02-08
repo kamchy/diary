@@ -32,15 +32,10 @@ Today (2026-02-08):
 
 # Libraries
 
-## Time
-`time` library was really strange to work with:
-- [time.rs doc](https://time-rs.github.io/book/api/format-description.html)
-- [time on docs.rs](https://docs.rs/time/latest/time/struct.Date.html#method.parse)
-.. so I switched to `chrono`.
 
 ## Chrono
-Used NaiveDate, as it seems to work all right for my little usecase.
-- [chrono](https://docs.rs/chrono/latest/chrono/struct.TimeDelta.html#method.checked_sub)
+For date parsing and time operations I use NaiveDate, as it seems to work all right for my little usecase.
+- [chrono](https://docs.rs/chrono/latest/chrono)
 
 
 # Todo
@@ -49,4 +44,6 @@ Used NaiveDate, as it seems to work all right for my little usecase.
 - allow to add anniversaries from commandline (option)
 
 # References
-- [std::From](https://doc.rust-lang.org/std/convert/trait.From.html))
+- [std::From](https://doc.rust-lang.org/std/convert/trait.From.html)
+- [rust by example](https://doc.rust-lang.org/rust-by-example/hello.html)
+- [rust book](https://doc.rust-lang.org/book/ch01-02-hello-world.html)
