@@ -1,3 +1,4 @@
+[![Build Status](https://github.com/kamchy/diary/actions/workflows/rust.yml/badge.svg)](https://github.com/kamchy/diary/actions)
 # Parse diary-like file
 This tool is my quick reminder for people's anniversaries and birthdays and
 a small Rust exercise.
