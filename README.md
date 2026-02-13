@@ -3,6 +3,7 @@ This tool is my quick reminder for people's anniversaries and birthdays and
 a small Rust exercise.
 
 It reads stdin, expecting anniversary lines: a date folowed by a  whitespace, followed by a description.
+
 For example, if this is the contents of `anni.txt` file:
 
 ```
@@ -42,8 +43,10 @@ For date parsing and time operations I use NaiveDate, as it seems to work all ri
 - sort results
 - display colors
 - allow to add anniversaries from commandline (option)
+- allow to enter days in the future
 
 # References
 - [std::From](https://doc.rust-lang.org/std/convert/trait.From.html)
 - [rust by example](https://doc.rust-lang.org/rust-by-example/hello.html)
 - [rust book](https://doc.rust-lang.org/book/ch01-02-hello-world.html)
+- [blog post](https://kamilachyla.com/en/posts/2026-02-07_anniversary)
