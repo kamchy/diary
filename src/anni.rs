@@ -28,29 +28,35 @@ pub struct AnnoDiff {
     pub days_till: u32,
 }
 
+fn anno_diff(anno: &NaiveDate, now: &NaiveDate) -> Option<AnnoDiff> {
+    if let Some(anno_date) = anno.with_year(now.year()).map(|a| {
+        if now.signed_duration_since(a).num_days() > 0 {
+            a.checked_add_months(Months::new(12))
+        } else {
+            Some(a)
+        }
+    }) {
+        if let Some(ad) = anno_date {
+            let which_anni = (ad.year() - anno.year()) as u32;
+            let days_till = ad.signed_duration_since(*now).num_days() as u32;
+            Some(AnnoDiff {
+                which_anni,
+                days_till,
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
 impl Anniversary {
     const FORMAT: &str = "%Y-%m-%d";
 
     /// Calculates which anniversary is ahead of `current` date
     /// and how many days we need to wait for it
-    pub fn anni_diff(&self, current: NaiveDate) -> Option<AnnoDiff> {
-        if current < self.date {
-            return None;
-        };
-
-        let next_anni_date = self.date.with_year(current.year())?;
-        let which_anni =
-            current.years_since(self.date)? + (if next_anni_date == current { 0 } else { 1 });
-        let next_anni_date = if next_anni_date < current {
-            next_anni_date.checked_add_months(Months::new(12))?
-        } else {
-            next_anni_date
-        };
-        let days_till = next_anni_date.signed_duration_since(current).num_days();
-        Some(AnnoDiff {
-            which_anni,
-            days_till: days_till as u32,
-        })
+    pub fn anni_diff(&self, current: NaiveDate) -> Result<AnnoDiff, DiaryErr> {
+        anno_diff(&self.date, &current).ok_or_else(|| DiaryErr::AnniversaryCalculationImpossible)
     }
 
     /// Allows to define an anniversary with given date and description
@@ -62,30 +68,46 @@ impl Anniversary {
     }
 }
 
-type Result<T> = std::result::Result<T, DiaryErr>;
+#[derive(Debug, Clone, Eq, PartialEq)]
+/// DiaryErr represents an error in diary line string.
+pub enum DiaryErr {
+    InvalidEntryFormat,
+    EmptyDate,
+    EmptyDesc,
+    NoSpaceSep,
+    AnniversaryCalculationImpossible,
+}
 
-#[derive(Debug, Clone)]
-pub struct DiaryErr(pub &'static str);
 impl fmt::Display for DiaryErr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Invalid anniversary definition: {}", self.0)
+        match self {
+            DiaryErr::InvalidEntryFormat => {
+                write!(f, "Invalid diary entry definition: ")
+            }
+            DiaryErr::AnniversaryCalculationImpossible => {
+                write!(f, "Cannot calculate anniversary:")
+            }
+            DiaryErr::EmptyDate => write!(f, "Date is empty"),
+            DiaryErr::EmptyDesc => write!(f, "Description is empty"),
+            DiaryErr::NoSpaceSep => write!(f, "No space separator"),
+        }
     }
 }
 impl From<ParseError> for DiaryErr {
     fn from(_: ParseError) -> Self {
-        DiaryErr("parse error")
+        DiaryErr::InvalidEntryFormat
     }
 }
 
 impl TryFrom<&str> for Anniversary {
     type Error = DiaryErr;
 
-    fn try_from(value: &str) -> Result<Anniversary> {
+    fn try_from(value: &str) -> Result<Anniversary, DiaryErr> {
         let split_val = value.split_once(" ");
         match split_val {
-            None => Err(DiaryErr("No space separator")),
-            Some((date, desc)) if date.trim().is_empty() => Err(DiaryErr("Empty date")),
-            Some((date, desc)) if desc.trim().is_empty() => Err(DiaryErr("Empty description")),
+            None => Err(DiaryErr::NoSpaceSep),
+            Some((date, desc)) if date.trim().is_empty() => Err(DiaryErr::EmptyDate),
+            Some((date, desc)) if desc.trim().is_empty() => Err(DiaryErr::EmptyDesc),
             Some((date, desc)) => NaiveDate::parse_from_str(date, Anniversary::FORMAT)
                 .map(|d| Anniversary::from(d, desc.to_owned()))
                 .map_err(|e| e.into()),
@@ -108,7 +130,7 @@ mod test {
             assert_eq!(actual.date, expected.unwrap());
             assert_eq!(actual.description, desc);
         } else {
-            panic!("Annibersary::tryFrom does not work!")
+            panic!("Anniversary::tryFrom does not work!")
         }
     }
 
@@ -145,23 +167,20 @@ mod test {
         verify_anni_diff(value, curr_date, expected_diff);
     }
 
-    fn verify_anni_diff(value: &str, now_date: NaiveDate, epxpected_diff: AnnoDiff) {
-        match Anniversary::try_from(value) {
-            Ok(anni) => match anni.anni_diff(now_date) {
-                Some(diff) => {
-                    assert_eq!(diff, epxpected_diff);
-                }
-                None => panic!("Cannot cretae anni_diff"),
-            },
-            Err(e) => panic!("Cannot read anni: {}", e),
-        }
+    fn verify_anni_diff(value: &str, now_date: NaiveDate, expected_diff: AnnoDiff) {
+        Anniversary::try_from(value)
+            .map(|a| a.anni_diff(now_date))
+            .map_or_else(
+                |_| panic!("error found"),
+                |diff| assert_eq!(diff, Ok(expected_diff)),
+            )
     }
 
     #[test]
     fn check_no_sep() {
         match Anniversary::try_from("") {
             Ok(_) => panic!("Should not parse invalid date"),
-            Err(DiaryErr(info)) => assert_eq!(info, "No space separator"),
+            Err(e) => assert_eq!(e, DiaryErr::NoSpaceSep),
         }
     }
 
@@ -169,7 +188,7 @@ mod test {
     fn check_no_date() {
         match Anniversary::try_from(" Anniversary") {
             Ok(_) => panic!("Should not parse invalid date"),
-            Err(DiaryErr(info)) => assert_eq!(info, "Empty date"),
+            Err(e) => assert_eq!(e, DiaryErr::EmptyDate),
         }
     }
 
@@ -177,48 +196,46 @@ mod test {
     fn check_empty_desc_error() {
         match Anniversary::try_from("2024-03-23 ") {
             Ok(_) => panic!("Should not parse invalid date"),
-            Err(DiaryErr(info)) => assert_eq!(info, "Empty description"),
-        }
-    }
-
-    fn test_anno(s: &str, now: &NaiveDate, exp_anni: u32, exp_days: u32) {
-        if let Ok(anni) = Anniversary::try_from(s) {
-            if let Some(diff) = anni.anni_diff(*now) {
-                assert_eq!(diff.which_anni, exp_anni);
-                assert_eq!(diff.days_till, exp_days);
-            } else {
-                panic!("could not create a diff for {anni}")
-            }
-        } else {
-            panic!("Invalid anniversatry input: {s}]");
+            Err(err) => assert_eq!(err, DiaryErr::EmptyDesc),
         }
     }
 
     #[test]
     fn check_toms_birthday() {
         let curr_day = NaiveDate::from_ymd_opt(2026, 2, 8).unwrap();
-        test_anno(
+        verify_anni_diff(
             "1989-02-09 Tom's birthday! Remember to buy him an apple.",
-            &curr_day,
-            37,
-            1,
+            curr_day,
+            AnnoDiff {
+                which_anni: 37,
+                days_till: 1,
+            },
         );
     }
 
     #[test]
     fn check_cargo() {
         let curr_day = NaiveDate::from_ymd_opt(2026, 2, 8).unwrap();
-        test_anno(
+        verify_anni_diff(
             "2025-12-31 Anniversary of shipping my first cargo crate!",
-            &curr_day,
-            1,
-            326,
-        );
+            curr_day,
+            AnnoDiff {
+                which_anni: 1,
+                days_till: 326,
+            },
+        )
     }
 
     #[test]
     fn check_diet() {
         let curr_day = NaiveDate::from_ymd_opt(2026, 2, 8).unwrap();
-        test_anno("2026-02-07 Diet anniversary", &curr_day, 1, 364);
+        verify_anni_diff(
+            "2026-02-07 Diet anniversary",
+            curr_day,
+            AnnoDiff {
+                which_anni: 1,
+                days_till: 364,
+            },
+        );
     }
 }
